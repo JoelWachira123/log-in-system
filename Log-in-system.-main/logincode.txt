@@ -1,0 +1,99 @@
+CREATE DATABASE secure_login;
+USE secure_login;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+<?php
+// db.php - Database Connection
+$host = 'localhost';
+$dbname = 'secure_login';
+$user = 'root'; // Change as needed
+$pass = ''; // Change as needed
+
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Database connection failed: " . $e->getMessage());
+}
+?>
+
+<?php
+// register.php - User Registration
+require 'db.php';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $username = $_POST['username'];
+    $email = $_POST['email'];
+    $password = password_hash($_POST['password'], PASSWORD_BCRYPT);
+
+    $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)");
+    if ($stmt->execute([$username, $email, $password])) {
+        echo "Registration successful! <a href='login.html'>Login here</a>";
+    } else {
+        echo "Error: Could not register.";
+    }
+}
+?>
+
+<?php
+// login.php - User Authentication
+require 'db.php';
+session_start();
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $username = $_POST['username'];
+    $password = $_POST['password'];
+
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
+    $stmt->execute([$username]);
+    $user = $stmt->fetch();
+
+    if ($user && password_verify($password, $user['password_hash'])) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        header("Location: dashboard.php");
+    } else {
+        echo "Invalid credentials.";
+    }
+}
+?>
+
+<?php
+// logout.php - Destroy Session
+session_start();
+session_destroy();
+header("Location: login.html");
+?>
+
+
+<!-- login.html - Frontend Login Form -->
+<form action="login.php" method="POST">
+    <input type="text" name="username" placeholder="Username" required>
+    <input type="password" name="password" placeholder="Password" required>
+    <button type="submit">Login</button>
+</form>
+
+<!-- register.html - Frontend Registration Form -->
+<form action="register.php" method="POST">
+    <input type="text" name="username" placeholder="Username" required>
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="password" name="password" placeholder="Password" required>
+    <button type="submit">Register</button>
+</form>
+
+<?php
+// dashboard.php - Protected Page
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.html");
+    exit();
+}
+echo "Welcome, " . htmlspecialchars($_SESSION['username']) . "! <a href='logout.php'>Logout</a>";
+?>
